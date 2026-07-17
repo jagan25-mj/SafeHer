@@ -8,8 +8,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_config.dart';
+import 'danger_detection_service.dart';
 import 'sos_service.dart';
 import 'mobile_pages/articles_page.dart';
+import 'mobile_pages/community_page.dart';
 import 'mobile_pages/contacts_page.dart';
 import 'mobile_pages/helplines_page.dart';
 import 'mobile_pages/location_share_page.dart';
@@ -39,11 +41,89 @@ class DashboardScreenState extends State<DashboardScreen> {
   bool _loadingDashboardData = true;
   String? _dashboardDataError;
 
+  // ── Danger Detection & Voice Command ──
+  final DangerDetectionService _dangerService = DangerDetectionService();
+  bool _shakeEnabled = false;
+  bool _voiceEnabled = false;
+
   @override
   void initState() {
     super.initState();
     _loadDashboardData();
     _loadLocationPreview();
+  }
+
+  @override
+  void dispose() {
+    _dangerService.dispose();
+    super.dispose();
+  }
+
+  // ── Toggle Shake Detection ──
+  void _toggleShakeDetection(bool value) {
+    if (value) {
+      _dangerService.startShakeDetection(
+        onTriggered: () {
+          if (!mounted) return;
+          _addSosLog('⚠️ SHAKE DETECTED — Alarm triggered!');
+          setState(() => _sosStatus = '⚠️ Danger detected via shake!');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('⚠️ Shake detected! Alarm sounding!'),
+              backgroundColor: const Color(0xFFEF4444),
+              action: SnackBarAction(
+                label: 'STOP ALARM',
+                textColor: Colors.white,
+                onPressed: () => _dangerService.stopAlarm(),
+              ),
+            ),
+          );
+        },
+      );
+    } else {
+      _dangerService.stopShakeDetection();
+      _dangerService.stopAlarm();
+    }
+    setState(() => _shakeEnabled = value);
+  }
+
+  // ── Toggle Voice Command ──
+  Future<void> _toggleVoiceCommand(bool value) async {
+    try {
+      if (value) {
+        await _dangerService.startVoiceCommand(
+          onTriggered: () {
+            if (!mounted) return;
+            _addSosLog('🎤 VOICE COMMAND — "Help Me" detected! Starting SOS...');
+            setState(() => _sosStatus = '🎤 Voice SOS triggered!');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('🎤 "Help Me" detected! Starting SOS...'),
+                backgroundColor: const Color(0xFFB4235A),
+                action: SnackBarAction(
+                  label: 'STOP ALARM',
+                  textColor: Colors.white,
+                  onPressed: () => _dangerService.stopAlarm(),
+                ),
+              ),
+            );
+            // Auto-start SOS recording
+            _startSOS();
+          },
+        );
+        setState(() => _voiceEnabled = true);
+      } else {
+        await _dangerService.stopVoiceCommand();
+        _dangerService.stopAlarm();
+        setState(() => _voiceEnabled = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Voice command error: $e')),
+        );
+      }
+    }
   }
 
   void _addSosLog(String message) {
@@ -498,6 +578,185 @@ out body 20;
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                // ── Safety Toggles: Shake Detection & Voice Command ──
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: safeHerGlassDecoration(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AI Safety Guard',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Enable hands-free danger detection.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF7F5B96),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      // Shake Detection Toggle
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _shakeEnabled
+                              ? const Color(0xFFFFF0F0)
+                              : SafeHerColors.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: _shakeEnabled
+                                ? const Color(0xFFEF4444)
+                                : SafeHerColors.stroke,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: _shakeEnabled
+                                    ? const Color(0xFFFFE0E0)
+                                    : SafeHerColors.accentSoft,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.vibration_rounded,
+                                color: _shakeEnabled
+                                    ? const Color(0xFFEF4444)
+                                    : SafeHerColors.accent,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Shake to Alarm',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: SafeHerColors.foreground,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _shakeEnabled
+                                        ? 'Shake your phone violently to sound alarm'
+                                        : 'Detects violent shaking and triggers alarm',
+                                    style: const TextStyle(
+                                      color: Color(0xFF7F5B96),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _shakeEnabled,
+                              onChanged: _toggleShakeDetection,
+                              activeColor: const Color(0xFFEF4444),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      // Voice Command Toggle
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _voiceEnabled
+                              ? const Color(0xFFEFF0FF)
+                              : SafeHerColors.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: _voiceEnabled
+                                ? SafeHerColors.accent
+                                : SafeHerColors.stroke,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: _voiceEnabled
+                                    ? const Color(0xFFE0E0FF)
+                                    : SafeHerColors.accentSoft,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.mic_rounded,
+                                color: _voiceEnabled
+                                    ? SafeHerColors.accent
+                                    : SafeHerColors.accent,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Voice Command',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: SafeHerColors.foreground,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _voiceEnabled
+                                        ? 'Listening… say "Help Me" to trigger SOS'
+                                        : 'Say "Help Me" to auto-trigger SOS',
+                                    style: const TextStyle(
+                                      color: Color(0xFF7F5B96),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _voiceEnabled,
+                              onChanged: (v) => _toggleVoiceCommand(v),
+                              activeColor: SafeHerColors.accent,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_shakeEnabled || _voiceEnabled) ...[
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (_shakeEnabled)
+                              const _Pill(
+                                label: '🛡️ Shake Guard Active',
+                                background: Color(0xFFFFE0E0),
+                                foreground: Color(0xFFEF4444),
+                              ),
+                            if (_voiceEnabled)
+                              const _Pill(
+                                label: '🎤 Voice Listening',
+                                background: Color(0xFFE0E0FF),
+                                foreground: Color(0xFF6F5BB6),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Container(
                   width: double.infinity,
@@ -720,6 +979,12 @@ out body 20;
                       title: "Articles",
                       subtitle: "Practical safety guidance",
                       onTap: () => _openArticlesPage(context),
+                    ),
+                    _FeatureTile(
+                      icon: Icons.people_rounded,
+                      title: "Community",
+                      subtitle: "Nearby SafeHer users",
+                      onTap: () => _openCommunityPage(context),
                     ),
                   ],
                 ),
@@ -1073,6 +1338,12 @@ out body 20;
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const ArticlesPage()));
+  }
+
+  void _openCommunityPage(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const CommunityPage()));
   }
 }
 

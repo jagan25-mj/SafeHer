@@ -366,7 +366,9 @@ class _ArticleItem {
 
   factory _ArticleItem.fromRow(Map<String, dynamic> row) {
     final title = (row['title']?.toString() ?? '').trim();
-    final content = (row['content']?.toString() ?? '').trim();
+    final rawContent = (row['content']?.toString() ?? '').trim();
+    // Sanitize HTML to prevent XSS from compromised admin content
+    final content = _sanitizeHtml(rawContent);
     final category = _deriveCategory(title, content);
     return _ArticleItem(
       id: row['id']?.toString() ?? '',
@@ -376,6 +378,22 @@ class _ArticleItem {
       summary: _deriveSummary(content),
       content: content,
       imageUrl: row['image_url']?.toString(),
+    );
+  }
+
+  /// Strip dangerous HTML tags, keeping only safe formatting tags.
+  static String _sanitizeHtml(String html) {
+    // Allowlist: only these tags are preserved
+    const allowedTags = [
+      'p', 'br', 'b', 'strong', 'i', 'em', 'u',
+      'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'a', 'span', 'blockquote', 'hr', 'div',
+    ];
+    final tagPattern = allowedTags.join('|');
+    // Remove all tags that are NOT in the allowlist
+    return html.replaceAllMapped(
+      RegExp(r'<\/?(?!(?:' + tagPattern + r')(?:\s|>|\/))(\w+)[^>]*>', caseSensitive: false),
+      (match) => '',
     );
   }
 

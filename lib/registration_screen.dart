@@ -25,6 +25,12 @@ class RegistrationScreenState extends State<RegistrationScreen> {
   final _c3Phone = TextEditingController();
   bool _loading = false;
 
+  // Input validation patterns
+  static final _phoneRegex = RegExp(r'^\+?[\d\s\-]{7,15}$');
+  static final _emailRegex = RegExp(
+    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+  );
+
   Future<void> _openWebApp() async {
     final uri = AppConfig.webAppUri;
     if (uri == null) {
@@ -77,6 +83,16 @@ class RegistrationScreenState extends State<RegistrationScreen> {
         throw Exception('Password must be at least 8 characters.');
       }
 
+      if (!_emailRegex.hasMatch(email)) {
+        throw Exception('Please enter a valid email address.');
+      }
+
+      if (!_phoneRegex.hasMatch(phone)) {
+        throw Exception(
+          'Please enter a valid phone number (7-15 digits).',
+        );
+      }
+
       final res = await Supabase.instance.client.auth.signUp(
         email: email,
         password: _pass.text,
@@ -111,6 +127,28 @@ class RegistrationScreenState extends State<RegistrationScreen> {
           },
         ];
 
+        // Filter out empty contacts — at least one must be valid
+        final validContacts = contactRows
+            .where((c) =>
+                (c['label'] as String).isNotEmpty &&
+                (c['phone'] as String).isNotEmpty)
+            .toList();
+
+        if (validContacts.isEmpty) {
+          throw Exception(
+            'Please fill in at least one emergency contact.',
+          );
+        }
+
+        // Validate phone format for each contact
+        for (final contact in validContacts) {
+          if (!_phoneRegex.hasMatch(contact['phone'] as String)) {
+            throw Exception(
+              'Emergency contact "${contact['label']}" has an invalid phone number.',
+            );
+          }
+        }
+
         await Supabase.instance.client
             .from('emergency_contacts')
             .delete()
@@ -118,7 +156,7 @@ class RegistrationScreenState extends State<RegistrationScreen> {
 
         await Supabase.instance.client
             .from('emergency_contacts')
-            .insert(contactRows);
+            .insert(validContacts);
       }
     } catch (e) {
       if (mounted) {

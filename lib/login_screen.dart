@@ -4,12 +4,25 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_config.dart';
 import 'theme.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   final VoidCallback onRegisterTap;
-  LoginScreen({required this.onRegisterTap, super.key});
+  const LoginScreen({required this.onRegisterTap, super.key});
 
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
   final _phone = TextEditingController();
   final _pass = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _phone.dispose();
+    _pass.dispose();
+    super.dispose();
+  }
 
   Future<void> _openWebApp(BuildContext context) async {
     final uri = AppConfig.webAppUri;
@@ -32,22 +45,78 @@ class LoginScreen extends StatelessWidget {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  String _friendlyLoginError(Object error) {
-    final message = error.toString().toLowerCase();
+  Future<void> _login() async {
+    final phone = _phone.text.trim();
+    final password = _pass.text;
 
-    if (message.contains('invalid login credentials')) {
-      return 'Incorrect password. Please try again.';
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your phone number.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
     }
 
-    if (message.contains('email not confirmed')) {
-      return 'Please confirm your email before logging in.';
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your password.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
     }
 
-    if (message.contains('no account found')) {
-      return 'No account found for that phone number.';
-    }
+    setState(() => _loading = true);
+    try {
+      // Look up the email associated with this phone number.
+      // Use a single generic error message to prevent user enumeration.
+      const genericError = 'Invalid phone number or password. Please try again.';
 
-    return 'Unable to sign in. Please check your details and try again.';
+      final profileResponse = await Supabase.instance.client
+          .from('profiles')
+          .select('email')
+          .eq('phone', phone)
+          .maybeSingle();
+
+      final email = profileResponse?['email'] as String?;
+      if (email == null || email.isEmpty) {
+        // Don't reveal whether the phone exists — use generic message
+        throw Exception(genericError);
+      }
+
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+    } on AuthException {
+      // Supabase auth error — use same generic message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid phone number or password. Please try again.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString().contains('Invalid phone')
+                  ? e.toString().replaceFirst('Exception: ', '')
+                  : 'Unable to sign in. Please check your details and try again.',
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -172,47 +241,7 @@ class LoginScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: ElevatedButton(
-                            onPressed: () async {
-                              try {
-                                final phone = _phone.text.trim();
-                                if (phone.isEmpty) {
-                                  throw Exception(
-                                    'Please enter your phone number.',
-                                  );
-                                }
-
-                                final profileResponse = await Supabase
-                                    .instance
-                                    .client
-                                    .from('profiles')
-                                    .select('email')
-                                    .eq('phone', phone)
-                                    .maybeSingle();
-
-                                final email =
-                                    profileResponse?['email'] as String?;
-                                if (email == null || email.isEmpty) {
-                                  throw Exception(
-                                    'No account found for that phone number.',
-                                  );
-                                }
-
-                                await Supabase.instance.client.auth
-                                    .signInWithPassword(
-                                      email: email,
-                                      password: _pass.text,
-                                    );
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(_friendlyLoginError(e)),
-                                      backgroundColor: Colors.redAccent,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
+                            onPressed: _loading ? null : _login,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,
                               shadowColor: Colors.transparent,
@@ -221,13 +250,22 @@ class LoginScreen extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            child: const Text(
-                              'Login to Dashboard',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
+                            child: _loading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Login to Dashboard',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
                           ),
                         ),
                       ),
@@ -258,7 +296,7 @@ class LoginScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 Center(
                   child: TextButton(
-                    onPressed: onRegisterTap,
+                    onPressed: widget.onRegisterTap,
                     child: Text.rich(
                       TextSpan(
                         text: 'New here? ',
