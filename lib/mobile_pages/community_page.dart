@@ -59,6 +59,9 @@ class _CommunityPageState extends State<CommunityPage> {
 
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Location request timed out. Please allow location access and try again.'),
       );
 
       if (!mounted) return;

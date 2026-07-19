@@ -54,10 +54,13 @@ android {
 
     buildTypes {
         release {
-            check(hasKeystoreProperties) {
-                "Missing android/key.properties. Add your release keystore settings before building for Play Store."
+            if (hasKeystoreProperties) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                // We don't throw an error here because it breaks debug builds (Gradle configures all build types).
+                // It will just fail later if a release build is actually attempted without a signing config.
+                println("WARNING: Missing android/key.properties. Release build will fail to sign.")
             }
-            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

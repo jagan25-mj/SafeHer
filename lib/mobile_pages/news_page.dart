@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -109,7 +110,7 @@ class _NewsPageState extends State<NewsPage> {
           cachedXml = cachedPayload.xml;
           cachedFetchedAt = cachedPayload.fetchedAt;
           if (cachedFetchedAt == null ||
-              _isSameLocalDay(cachedFetchedAt!.toLocal(), DateTime.now())) {
+              _isSameLocalDay(cachedFetchedAt.toLocal(), DateTime.now())) {
             _parseAndSetNews(cachedPayload.xml, fetchedAt: cachedFetchedAt);
           }
         }
@@ -118,13 +119,21 @@ class _NewsPageState extends State<NewsPage> {
 
     try {
       final query = _getSearchQuery();
-      final url = 'https://news.google.com/rss/search?q=$query&hl=en-IN&gl=IN&ceid=IN:en';
+      final rawUrl = 'https://news.google.com/rss/search?q=$query&hl=en-IN&gl=IN&ceid=IN:en';
+      // On web, browsers block cross-origin requests to news.google.com (CORS).
+      // Route through a public CORS proxy so the RSS feed is accessible.
+      final url = kIsWeb
+          ? 'https://api.allorigins.win/raw?url=${Uri.encodeComponent(rawUrl)}'
+          : rawUrl;
+      debugPrint('[NewsPage] Fetching: $url');
       final response = await http.get(
         Uri.parse(url),
         headers: {
           'User-Agent': 'SafeHer/1.0 (Flutter; Women Safety App)',
         },
-      );
+      ).timeout(const Duration(seconds: 20));
+
+      debugPrint('[NewsPage] Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         await _saveCachePayload(prefs, cacheKey, response.body);
@@ -133,6 +142,7 @@ class _NewsPageState extends State<NewsPage> {
         throw Exception('Failed to load news (Status ${response.statusCode})');
       }
     } catch (e) {
+      debugPrint('[NewsPage] Error: $e');
       if (mounted) {
         if (_newsList.isEmpty) {
           if (cachedXml != null) {
@@ -469,7 +479,11 @@ class _NewsPageState extends State<NewsPage> {
 
   String _formatDate(String rawDate) {
     try {
-      final dt = HttpDate.parse(rawDate);
+      // Parse RFC 2822 dates like "Mon, 14 Jul 2026 08:30:00 GMT"
+      final dt = _parseRfc2822(rawDate);
+      if (dt == null) {
+        return rawDate.length > 22 ? rawDate.substring(0, 22) : rawDate;
+      }
       final diff = DateTime.now().toUtc().difference(dt);
       if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
       if (diff.inHours < 24) return '${diff.inHours}h ago';
@@ -478,6 +492,35 @@ class _NewsPageState extends State<NewsPage> {
     } catch (_) {
       if (rawDate.length > 22) return rawDate.substring(0, 22);
       return rawDate;
+    }
+  }
+
+  static final _months = {
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+  };
+
+  /// Parse RFC 2822 date strings without dart:io dependency.
+  static DateTime? _parseRfc2822(String raw) {
+    try {
+      // e.g. "Mon, 14 Jul 2026 08:30:00 GMT"
+      final parts = raw.replaceAll(',', '').trim().split(RegExp(r'\s+'));
+      // Could be "14 Jul 2026 08:30:00 GMT" or "Mon 14 Jul 2026 08:30:00 GMT"
+      final dayIndex = parts.indexWhere((p) => int.tryParse(p) != null);
+      if (dayIndex < 0 || dayIndex + 3 >= parts.length) return null;
+      final day = int.parse(parts[dayIndex]);
+      final month = _months[parts[dayIndex + 1].toLowerCase()];
+      final year = int.parse(parts[dayIndex + 2]);
+      final timeParts = parts[dayIndex + 3].split(':');
+      if (month == null || timeParts.length < 3) return null;
+      return DateTime.utc(
+        year, month, day,
+        int.parse(timeParts[0]),
+        int.parse(timeParts[1]),
+        int.parse(timeParts[2]),
+      );
+    } catch (_) {
+      return null;
     }
   }
 }

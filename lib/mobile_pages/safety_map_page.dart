@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -56,6 +57,9 @@ class _SafetyMapPageState extends State<SafetyMapPage> {
 
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Location request timed out. Please allow location access and try again.'),
       );
 
       final predictionFuture = _fetchThreatPrediction(position);
@@ -101,18 +105,20 @@ class _SafetyMapPageState extends State<SafetyMapPage> {
     if (_position == null) return;
     final latitude = _position!.latitude;
     final longitude = _position!.longitude;
-    final googleMapsUri = Platform.isIOS
-        ? Uri.parse(
-            'comgooglemaps://?q=$latitude,$longitude&center=$latitude,$longitude&zoom=16',
-          )
-        : Uri.parse('geo:$latitude,$longitude?q=$latitude,$longitude');
     final webMapsUri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
     );
 
+    if (kIsWeb) {
+      await launchUrl(webMapsUri, mode: LaunchMode.externalApplication);
+      return;
+    }
+
+    // On mobile, try native maps first, then fall back to web.
+    final nativeMapsUri = Uri.parse('geo:$latitude,$longitude?q=$latitude,$longitude');
     try {
       final launched = await launchUrl(
-        googleMapsUri,
+        nativeMapsUri,
         mode: LaunchMode.externalApplication,
       );
       if (launched) return;
