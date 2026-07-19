@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,8 +18,14 @@ class _NewsPageState extends State<NewsPage> {
   final List<_NewsItem> _newsList = [];
   bool _isLoading = true;
   String? _error;
-  
-  final List<String> _categories = ['General', 'Safety Laws', 'Self Defense', 'Women\'s Rights'];
+  DateTime? _lastUpdatedAt;
+
+  final List<String> _categories = [
+    'General',
+    'Safety Laws',
+    'Self Defense',
+    'Women\'s Rights',
+  ];
   String _selectedCategory = 'General';
 
   @override
@@ -40,6 +48,46 @@ class _NewsPageState extends State<NewsPage> {
     }
   }
 
+  String _cacheKeyForCategory(String category) => 'cached_news_$category';
+
+  bool _isSameLocalDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  ({String xml, DateTime? fetchedAt})? _decodeCachePayload(String rawValue) {
+    try {
+      final decoded = jsonDecode(rawValue);
+      if (decoded is Map<String, dynamic>) {
+        final xml = decoded['xml']?.toString();
+        final fetchedAtRaw = decoded['fetchedAt']?.toString();
+        if (xml == null || xml.isEmpty) return null;
+        return (
+          xml: xml,
+          fetchedAt: fetchedAtRaw == null ? null : DateTime.tryParse(fetchedAtRaw),
+        );
+      }
+    } catch (_) {
+      // Backward compatibility: older cache entries were plain XML strings.
+    }
+
+    if (rawValue.trim().isEmpty) return null;
+    return (xml: rawValue, fetchedAt: null);
+  }
+
+  Future<void> _saveCachePayload(
+    SharedPreferences prefs,
+    String cacheKey,
+    String xml,
+  ) async {
+    await prefs.setString(
+      cacheKey,
+      jsonEncode({
+        'fetchedAt': DateTime.now().toUtc().toIso8601String(),
+        'xml': xml,
+      }),
+    );
+  }
+
   Future<void> _fetchLiveNews({bool loadFromCacheFirst = false}) async {
     if (!mounted) return;
     setState(() {
@@ -47,14 +95,23 @@ class _NewsPageState extends State<NewsPage> {
       _error = null;
     });
 
-    final cacheKey = 'cached_news_$_selectedCategory';
+    final cacheKey = _cacheKeyForCategory(_selectedCategory);
     final prefs = await SharedPreferences.getInstance();
+    String? cachedXml;
+    DateTime? cachedFetchedAt;
 
     if (loadFromCacheFirst) {
-      final cachedXml = prefs.getString(cacheKey);
-      if (cachedXml != null) {
-        _parseAndSetNews(cachedXml);
-        // Don't stop loading, we want to fetch the latest in the background
+      final cachedValue = prefs.getString(cacheKey);
+      if (cachedValue != null) {
+        final cachedPayload = _decodeCachePayload(cachedValue);
+        if (cachedPayload != null) {
+          cachedXml = cachedPayload.xml;
+          cachedFetchedAt = cachedPayload.fetchedAt;
+          if (cachedFetchedAt == null ||
+              _isSameLocalDay(cachedFetchedAt!.toLocal(), DateTime.now())) {
+            _parseAndSetNews(cachedPayload.xml, fetchedAt: cachedFetchedAt);
+          }
+        }
       }
     }
 
@@ -64,29 +121,39 @@ class _NewsPageState extends State<NewsPage> {
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
-        await prefs.setString(cacheKey, response.body); // Cache it
-        _parseAndSetNews(response.body);
+        await _saveCachePayload(prefs, cacheKey, response.body);
+        _parseAndSetNews(response.body, fetchedAt: DateTime.now().toUtc());
       } else {
         throw Exception('Failed to load news (Status ${response.statusCode})');
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          if (_newsList.isEmpty) {
-            _error = 'Could not fetch live news right now. Please check your internet connection.';
+        if (_newsList.isEmpty) {
+          if (cachedXml != null) {
+            _parseAndSetNews(cachedXml, fetchedAt: cachedFetchedAt);
+            setState(() {
+              _error = 'Showing saved daily news. Refresh when you are back online.';
+            });
           } else {
-            // If we have cached news, just show a small snackbar instead of blocking UI
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Offline mode: Showing cached news.')),
-            );
+            setState(() {
+              _error = 'Could not fetch live news right now. Please check your internet connection.';
+              _isLoading = false;
+            });
           }
-          _isLoading = false;
-        });
+        } else {
+          // If we have cached news, just show a small snackbar instead of blocking UI
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Offline mode: Showing cached news.')),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }
 
-  void _parseAndSetNews(String xmlString) {
+  void _parseAndSetNews(String xmlString, {DateTime? fetchedAt}) {
     try {
       final document = XmlDocument.parse(xmlString);
       final items = document.findAllElements('item');
@@ -115,6 +182,7 @@ class _NewsPageState extends State<NewsPage> {
         setState(() {
           _newsList.clear();
           _newsList.addAll(parsedNews);
+          _lastUpdatedAt = fetchedAt;
           _isLoading = false;
         });
       }
@@ -153,9 +221,68 @@ class _NewsPageState extends State<NewsPage> {
       ),
       body: Column(
         children: [
+          _buildDailyBrief(),
           _buildCategoryChips(),
           Expanded(child: _buildBody()),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDailyBrief() {
+    final updatedAt = _lastUpdatedAt;
+    final updatedLabel = updatedAt == null
+        ? 'Refreshing live headlines'
+        : 'Updated ${updatedAt.toLocal().toString().substring(0, 16)}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: SafeHerColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: SafeHerColors.stroke),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                gradient: SafeHerGradients.brand,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.newspaper_rounded, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Daily Brief',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: SafeHerColors.foreground,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$updatedLabel • ${_newsList.length} headlines',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: SafeHerColors.brandStrong,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.trending_up_rounded, color: SafeHerColors.accent),
+          ],
+        ),
       ),
     );
   }

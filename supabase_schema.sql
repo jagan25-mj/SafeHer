@@ -47,12 +47,58 @@ CREATE POLICY profiles_insert ON profiles
     FOR INSERT TO authenticated
     WITH CHECK (auth.uid() = id);
 
-DROP POLICY IF EXISTS profiles_login_lookup ON profiles;
--- Login lookup: allow reading email by phone (needed for phone → email lookup)
--- This is scoped to SELECT only and limited to the phone match
-CREATE POLICY profiles_login_lookup ON profiles
-    FOR SELECT TO anon
-    USING (true);
+-- Create/refresh profile and emergency contacts from auth metadata.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    contact_item jsonb;
+BEGIN
+    INSERT INTO public.profiles (id, phone, role, full_name, email)
+    VALUES (
+        NEW.id,
+        COALESCE(NULLIF(NEW.raw_user_meta_data ->> 'phone', ''), NEW.email, NEW.id::text),
+        COALESCE((NEW.raw_user_meta_data ->> 'role')::user_role, 'user'),
+        COALESCE(NEW.raw_user_meta_data ->> 'full_name', ''),
+        COALESCE(NEW.email, '')
+    )
+    ON CONFLICT (id) DO UPDATE
+        SET phone = EXCLUDED.phone,
+            role = EXCLUDED.role,
+            full_name = EXCLUDED.full_name,
+            email = EXCLUDED.email;
+
+    IF jsonb_typeof(NEW.raw_user_meta_data -> 'emergency_contacts') = 'array' THEN
+        DELETE FROM public.emergency_contacts
+        WHERE user_id = NEW.id;
+
+        FOR contact_item IN
+            SELECT value
+            FROM jsonb_array_elements(NEW.raw_user_meta_data -> 'emergency_contacts') AS value
+        LOOP
+            IF COALESCE(contact_item ->> 'label', '') <> ''
+               AND COALESCE(contact_item ->> 'phone', '') <> '' THEN
+                INSERT INTO public.emergency_contacts (user_id, label, phone)
+                VALUES (
+                    NEW.id,
+                    contact_item ->> 'label',
+                    contact_item ->> 'phone'
+                );
+            END IF;
+        END LOOP;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ──────────────────────────────────────────────────────────────
 -- 3. Emergency Contacts (separate table, not JSONB)
@@ -117,6 +163,28 @@ DROP POLICY IF EXISTS sos_vault_insert ON sos_vault;
 CREATE POLICY sos_vault_insert ON sos_vault
     FOR INSERT TO authenticated
     WITH CHECK (auth.uid() = user_id);
+
+-- Storage bucket for SOS videos.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('sos-vault', 'sos-vault', true)
+ON CONFLICT (id) DO UPDATE
+    SET name = EXCLUDED.name,
+        public = EXCLUDED.public;
+
+DROP POLICY IF EXISTS sos_vault_objects_select ON storage.objects;
+CREATE POLICY sos_vault_objects_select ON storage.objects
+    FOR SELECT TO authenticated
+    USING (bucket_id = 'sos-vault' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+DROP POLICY IF EXISTS sos_vault_objects_insert ON storage.objects;
+CREATE POLICY sos_vault_objects_insert ON storage.objects
+    FOR INSERT TO authenticated
+    WITH CHECK (bucket_id = 'sos-vault' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+DROP POLICY IF EXISTS sos_vault_objects_delete ON storage.objects;
+CREATE POLICY sos_vault_objects_delete ON storage.objects
+    FOR DELETE TO authenticated
+    USING (bucket_id = 'sos-vault' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 -- ──────────────────────────────────────────────────────────────
 -- 5. Tracking (live location sharing)

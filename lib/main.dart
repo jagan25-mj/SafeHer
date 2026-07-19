@@ -23,7 +23,7 @@ class SafeHerApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: buildSafeHerTheme(),
-      home: const DashboardScreen(),
+      home: const AuthGate(),
     );
   }
 }

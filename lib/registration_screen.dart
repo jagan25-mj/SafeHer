@@ -93,71 +93,61 @@ class RegistrationScreenState extends State<RegistrationScreen> {
         );
       }
 
-      final res = await Supabase.instance.client.auth.signUp(
-        email: email,
-        password: _pass.text,
-      );
+      final contactRows = [
+        {
+          'label': _c1Label.text.trim(),
+          'phone': _c1Phone.text.trim(),
+        },
+        {
+          'label': _c2Label.text.trim(),
+          'phone': _c2Phone.text.trim(),
+        },
+        {
+          'label': _c3Label.text.trim(),
+          'phone': _c3Phone.text.trim(),
+        },
+      ];
 
-      if (res.user != null) {
-        final userId = res.user!.id;
+      final validContacts = contactRows
+          .where(
+            (contact) =>
+                (contact['label'] as String).isNotEmpty &&
+                (contact['phone'] as String).isNotEmpty,
+          )
+          .toList();
 
-        await Supabase.instance.client.from('profiles').upsert({
-          'id': userId,
-          'full_name': fullName,
-          'phone': phone,
-          'email': email,
-          'role': 'user',
-          'emergency_contacts': [],
-        }, onConflict: 'id');
+      if (validContacts.isEmpty) {
+        throw Exception(
+          'Please fill in at least one emergency contact.',
+        );
+      }
 
-        final contactRows = [
-          {
-            'user_id': userId,
-            'label': _c1Label.text.trim(),
-            'phone': _c1Phone.text.trim(),
-          },
-          {
-            'user_id': userId,
-            'label': _c2Label.text.trim(),
-            'phone': _c2Phone.text.trim(),
-          },
-          {
-            'user_id': userId,
-            'label': _c3Label.text.trim(),
-            'phone': _c3Phone.text.trim(),
-          },
-        ];
-
-        // Filter out empty contacts — at least one must be valid
-        final validContacts = contactRows
-            .where((c) =>
-                (c['label'] as String).isNotEmpty &&
-                (c['phone'] as String).isNotEmpty)
-            .toList();
-
-        if (validContacts.isEmpty) {
+      for (final contact in validContacts) {
+        if (!_phoneRegex.hasMatch(contact['phone'] as String)) {
           throw Exception(
-            'Please fill in at least one emergency contact.',
+            'Emergency contact "${contact['label']}" has an invalid phone number.',
           );
         }
+      }
 
-        // Validate phone format for each contact
-        for (final contact in validContacts) {
-          if (!_phoneRegex.hasMatch(contact['phone'] as String)) {
-            throw Exception(
-              'Emergency contact "${contact['label']}" has an invalid phone number.',
-            );
-          }
-        }
+      await Supabase.instance.client.auth.signUp(
+        email: email,
+        password: _pass.text,
+        data: {
+          'full_name': fullName,
+          'phone': phone,
+          'emergency_contacts': validContacts,
+        },
+      );
 
-        await Supabase.instance.client
-            .from('emergency_contacts')
-            .delete()
-            .eq('user_id', userId);
-
-        await Supabase.instance.client
-            .from('emergency_contacts')
-            .insert(validContacts);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Account created. Check your email if confirmation is enabled, then sign in.',
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {

@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app_config.dart';
 import 'theme.dart';
-import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onRegisterTap;
@@ -72,18 +71,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _loading = true);
     try {
-      // Look up the email associated with this phone number.
-      // Use a single generic error message to prevent user enumeration.
-      const genericError = 'Invalid email address or password. Please try again.';
-
-      if (email == 'admin@safeher.com') {
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => DashboardScreen()),
-        );
-        return;
-      }
-
       await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
