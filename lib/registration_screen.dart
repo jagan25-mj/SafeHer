@@ -70,6 +70,25 @@ class RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
+  Future<void> _saveEmergencyContactsForUser({
+    required String userId,
+    required List<Map<String, String>> contacts,
+  }) async {
+    if (contacts.isEmpty) return;
+
+    final rows = contacts
+        .map(
+          (contact) => {
+            'user_id': userId,
+            'label': contact['label'],
+            'phone': contact['phone'],
+          },
+        )
+        .toList();
+
+    await Supabase.instance.client.from('emergency_contacts').insert(rows);
+  }
+
   Future<void> _register() async {
     // Client-side validation
     final fullName = _fullName.text.trim();
@@ -106,6 +125,12 @@ class RegistrationScreenState extends State<RegistrationScreen> {
         .where((c) =>
             (c['label'] as String).isNotEmpty &&
             (c['phone'] as String).isNotEmpty)
+        .map(
+          (c) => {
+            'label': c['label'] as String,
+            'phone': c['phone'] as String,
+          },
+        )
         .toList();
 
     if (validContacts.isEmpty) {
@@ -123,13 +148,12 @@ class RegistrationScreenState extends State<RegistrationScreen> {
     // API call
     setState(() => _loading = true);
     try {
-      await Supabase.instance.client.auth.signUp(
+      final response = await Supabase.instance.client.auth.signUp(
         email: email,
         password: _pass.text,
         data: {
           'full_name': fullName,
           'phone': phone,
-          'emergency_contacts': validContacts,
         },
       );
 
@@ -153,6 +177,17 @@ class RegistrationScreenState extends State<RegistrationScreen> {
         _showSnackBar('This phone number is already linked to another account.');
       } else {
         _showSnackBar('Database error: ${e.message}');
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _friendlyRegistrationError(e.message.isEmpty ? e : e.message),
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
       }
     } catch (e) {
       _showSnackBar('An unexpected error occurred: $e');
