@@ -23,13 +23,8 @@ tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
 
-subprojects {
-    afterEvaluate {
-        if (plugins.hasPlugin("com.android.library")) {
-            val android = extensions.getByName("android") as com.android.build.gradle.LibraryExtension
-            if (android.compileSdk == null) {
-                android.compileSdk = 34
-            }
-        }
-    }
-}
+// Provide properties for older flutter plugins (like app_links) that look for rootProject.ext
+extra.set("compileSdkVersion", 34)
+extra.set("minSdkVersion", 24)
+extra.set("targetSdkVersion", 34)
+extra.set("ndkVersion", "26.1.10909125")
