@@ -178,17 +178,6 @@ class RegistrationScreenState extends State<RegistrationScreen> {
       } else {
         _showSnackBar('Database error: ${e.message}');
       }
-    } on AuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _friendlyRegistrationError(e.message.isEmpty ? e : e.message),
-            ),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
     } catch (e) {
       _showSnackBar('An unexpected error occurred: $e');
     } finally {
