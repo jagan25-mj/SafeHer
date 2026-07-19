@@ -18,7 +18,9 @@ if (hasKeystoreProperties) {
 
 android {
     namespace = "com.safeher.app"
+    // compileSdk 34
     compileSdk = flutter.compileSdkVersion
+    // ndkVersion 26
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -46,7 +48,9 @@ android {
         applicationId = "com.safeher.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // minSdk 24
         minSdk = flutter.minSdkVersion
+        // targetSdk 34
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
