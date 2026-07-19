@@ -24,7 +24,7 @@ dependencies:
   latlong2: ^0.9.1
   http: ^1.2.2
   speech_to_text: ^7.0.0
-  xml: ^7.0.1
+  xml: any
   shared_preferences: any
 
 dev_dependencies:
