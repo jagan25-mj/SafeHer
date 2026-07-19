@@ -10,20 +10,20 @@ dependencies:
   flutter:
     sdk: flutter
 
-  supabase_flutter: ^2.5.2
-  camera: ^0.10.5+9
-  permission_handler: ^11.3.1
-  flutter_background_service: ^5.0.5
-  provider: ^6.1.2
-  google_fonts: ^8.0.2
-  path_provider: ^2.1.5
-  url_launcher: ^6.3.2
-  geolocator: ^13.0.2
-  flutter_html: ^3.0.0
-  flutter_map: ^7.0.2
-  latlong2: ^0.9.1
-  http: ^1.2.2
-  speech_to_text: ^7.0.0
+  supabase_flutter: any
+  camera: any
+  permission_handler: any
+  flutter_background_service: any
+  provider: any
+  google_fonts: any
+  path_provider: any
+  url_launcher: any
+  geolocator: any
+  flutter_html: any
+  flutter_map: any
+  latlong2: any
+  http: any
+  speech_to_text: any
   xml: any
   shared_preferences: any
 
