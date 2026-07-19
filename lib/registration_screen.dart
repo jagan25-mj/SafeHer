@@ -31,66 +31,68 @@ class RegistrationScreenState extends State<RegistrationScreen> {
     r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
   );
 
+  @override
+  void dispose() {
+    _fullName.dispose();
+    _email.dispose();
+    _phone.dispose();
+    _pass.dispose();
+    _c1Label.dispose();
+    _c1Phone.dispose();
+    _c2Label.dispose();
+    _c2Phone.dispose();
+    _c3Label.dispose();
+    _c3Phone.dispose();
+    super.dispose();
+  }
+
   Future<void> _openWebApp() async {
     final uri = AppConfig.webAppUri;
     if (uri == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('SAFEHER_WEB_URL is not configured.')),
-      );
+      _showSnackBar('SAFEHER_WEB_URL is not configured.');
       return;
     }
-
     if (!await canLaunchUrl(uri)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to open the deployed web app.')),
-        );
-      }
+      _showSnackBar('Unable to open the deployed web app.');
       return;
     }
-
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  String _friendlyRegistrationError(Object error) {
-    final message = error.toString().toLowerCase();
-
-    if (message.contains('already registered') ||
-        message.contains('email already in use') ||
-        message.contains('user already exists')) {
-      return 'This email is already registered. Please sign in instead.';
-    }
-
-    if (message.contains('duplicate key value') && message.contains('phone')) {
-      return 'This phone number is already linked to another account.';
-    }
-
-    return 'Unable to create your account. Please check your details and try again.';
+  void _showSnackBar(String message, {bool isError = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.redAccent : Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<void> _register() async {
-    // Client-side validation (shown directly to user)
+    // Client-side validation
     final fullName = _fullName.text.trim();
     final email = _email.text.trim().toLowerCase();
     final phone = _phone.text.trim();
 
     if (fullName.isEmpty || email.isEmpty || phone.isEmpty) {
-      _showValidationError('Please complete your full name, email, and phone.');
+      _showSnackBar('Please complete your full name, email, and phone.');
       return;
     }
 
     if (_pass.text.length < 8) {
-      _showValidationError('Password must be at least 8 characters.');
+      _showSnackBar('Password must be at least 8 characters.');
       return;
     }
 
     if (!_emailRegex.hasMatch(email)) {
-      _showValidationError('Please enter a valid email address.');
+      _showSnackBar('Please enter a valid email address.');
       return;
     }
 
     if (!_phoneRegex.hasMatch(phone)) {
-      _showValidationError('Please enter a valid phone number (7-15 digits).');
+      _showSnackBar('Please enter a valid phone number (7-15 digits).');
       return;
     }
 
@@ -107,15 +109,13 @@ class RegistrationScreenState extends State<RegistrationScreen> {
         .toList();
 
     if (validContacts.isEmpty) {
-      _showValidationError('Please fill in at least one emergency contact.');
+      _showSnackBar('Please fill in at least one emergency contact.');
       return;
     }
 
     for (final contact in validContacts) {
       if (!_phoneRegex.hasMatch(contact['phone'] as String)) {
-        _showValidationError(
-          'Emergency contact "${contact['label']}" has an invalid phone number.',
-        );
+        _showSnackBar('Emergency contact "${contact['label']}" has an invalid phone number.');
         return;
       }
     }
@@ -133,31 +133,111 @@ class RegistrationScreenState extends State<RegistrationScreen> {
         },
       );
 
+      _showSnackBar(
+        'Account created! Check your email to confirm if required, then sign in.',
+        isError: false,
+      );
+      // Wait a moment before switching to login
+      await Future.delayed(const Duration(seconds: 2));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Account created. Check your email if confirmation is enabled, then sign in.',
-            ),
-          ),
-        );
+        widget.onLoginTap();
+      }
+    } on AuthException catch (e) {
+      if (e.message.contains('Database error saving new user')) {
+        _showSnackBar('This phone number might already be in use, or there is a server configuration issue.');
+      } else {
+        _showSnackBar(e.message);
+      }
+    } on PostgrestException catch (e) {
+      if (e.message.contains('duplicate key value') && e.message.contains('phone')) {
+        _showSnackBar('This phone number is already linked to another account.');
+      } else {
+        _showSnackBar('Database error: ${e.message}');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_friendlyRegistrationError(e)),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+      _showSnackBar('An unexpected error occurred: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-    if (mounted) setState(() => _loading = false);
   }
 
-  void _showValidationError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+  Widget _buildLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          color: SafeHerColors.foreground,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(
+    TextEditingController controller,
+    String hint,
+    IconData icon, {
+    bool isPassword = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: isPassword,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon, color: SafeHerColors.accent),
+        hintText: hint,
+        fillColor: const Color(0xFFFCFAFF),
+      ),
+    );
+  }
+
+  Widget _buildContactPair({
+    required TextEditingController labelController,
+    required TextEditingController phoneController,
+    required String hintPrefix,
+  }) {
+    return Column(
+      children: [
+        TextField(
+          controller: labelController,
+          decoration: InputDecoration(
+            prefixIcon: Icon(
+              Icons.badge_outlined,
+              color: SafeHerColors.accent.withValues(alpha: 0.7),
+              size: 20,
+            ),
+            hintText: 'Relation (e.g. $hintPrefix)',
+            hintStyle: const TextStyle(fontSize: 14),
+            filled: false,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          ),
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: phoneController,
+          keyboardType: TextInputType.phone,
+          decoration: InputDecoration(
+            prefixIcon: Icon(
+              Icons.phone_android_rounded,
+              color: SafeHerColors.accent.withValues(alpha: 0.7),
+              size: 20,
+            ),
+            hintText: 'Phone number',
+            hintStyle: const TextStyle(fontSize: 14),
+            filled: false,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          ),
+        ),
+      ],
     );
   }
 
@@ -248,7 +328,7 @@ class RegistrationScreenState extends State<RegistrationScreen> {
                       const SizedBox(height: 12),
                       _buildTextField(
                         _pass,
-                        'Password',
+                        'Password (min 8 chars)',
                         Icons.lock_outline_rounded,
                         isPassword: true,
                       ),
@@ -262,20 +342,31 @@ class RegistrationScreenState extends State<RegistrationScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildLabel('Emergency Safety Circle (3 required)'),
+                      _buildLabel('Emergency Safety Circle (at least 1 required)'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Add up to 3 trusted contacts who will be notified instantly when you need help.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF7A5A94),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       _buildContactPair(
                         labelController: _c1Label,
                         phoneController: _c1Phone,
+                        hintPrefix: 'Mom',
                       ),
-                      const Divider(height: 24, color: SafeHerColors.stroke),
+                      const Divider(height: 16, color: SafeHerColors.stroke),
                       _buildContactPair(
                         labelController: _c2Label,
                         phoneController: _c2Phone,
+                        hintPrefix: 'Friend',
                       ),
-                      const Divider(height: 24, color: SafeHerColors.stroke),
+                      const Divider(height: 16, color: SafeHerColors.stroke),
                       _buildContactPair(
                         labelController: _c3Label,
                         phoneController: _c3Phone,
+                        hintPrefix: 'Dad',
                       ),
                     ],
                   ),
@@ -363,85 +454,6 @@ class RegistrationScreenState extends State<RegistrationScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 14,
-          color: SafeHerColors.foreground,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField(
-    TextEditingController controller,
-    String hint,
-    IconData icon, {
-    bool isPassword = false,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextField(
-      controller: controller,
-      obscureText: isPassword,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: SafeHerColors.accent),
-        hintText: hint,
-        fillColor: const Color(0xFFFCFAFF),
-      ),
-    );
-  }
-
-  Widget _buildContactPair({
-    required TextEditingController labelController,
-    required TextEditingController phoneController,
-  }) {
-    return Column(
-      children: [
-        TextField(
-          controller: labelController,
-          decoration: InputDecoration(
-            prefixIcon: Icon(
-              Icons.badge_outlined,
-              color: SafeHerColors.accent.withValues(alpha: 0.7),
-              size: 20,
-            ),
-            hintText: 'Relation (e.g. Mom)',
-            hintStyle: const TextStyle(fontSize: 14),
-            filled: false,
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 10),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: phoneController,
-          keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            prefixIcon: Icon(
-              Icons.phone_android_rounded,
-              color: SafeHerColors.accent.withValues(alpha: 0.7),
-              size: 20,
-            ),
-            hintText: 'Phone number',
-            hintStyle: const TextStyle(fontSize: 14),
-            filled: false,
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 10),
-          ),
-        ),
-      ],
     );
   }
 }

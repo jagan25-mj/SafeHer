@@ -27,22 +27,25 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _openWebApp(BuildContext context) async {
     final uri = AppConfig.webAppUri;
     if (uri == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('SAFEHER_WEB_URL is not configured.')),
-      );
+      _showErrorSnackBar('SAFEHER_WEB_URL is not configured.');
       return;
     }
-
     if (!await canLaunchUrl(uri)) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to open the deployed web app.')),
-        );
-      }
+      _showErrorSnackBar('Unable to open the deployed web app.');
       return;
     }
-
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<void> _login() async {
@@ -50,22 +53,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _pass.text;
 
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your email address.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      _showErrorSnackBar('Please enter your email address.');
       return;
     }
-
     if (password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your password.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      _showErrorSnackBar('Please enter your password.');
       return;
     }
 
@@ -75,32 +67,52 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
-    } on AuthException {
-      // Supabase auth error — use same generic message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid email address or password. Please try again.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+    } on AuthException catch (e) {
+      _showErrorSnackBar(e.message);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e.toString().contains('Invalid email')
-                  ? e.toString().replaceFirst('Exception: ', '')
-                  : 'Unable to sign in. Please check your details and try again.',
-            ),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+      _showErrorSnackBar(
+        e.toString().contains('Invalid email')
+            ? e.toString().replaceFirst('Exception: ', '')
+            : 'An unexpected error occurred. Please try again.',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  // Helper widget for Labels
+  Widget _buildLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          color: SafeHerColors.foreground,
+        ),
+      ),
+    );
+  }
+
+  // Modern Input Builder
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool isPassword = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: isPassword,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon, color: SafeHerColors.accent),
+        hintText: hint,
+        fillColor: const Color(0xFFFCFAFF),
+      ),
+    );
   }
 
   @override
@@ -305,41 +317,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  // Helper widget for Labels
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 14,
-          color: SafeHerColors.foreground,
-        ),
-      ),
-    );
-  }
-
-  // Modern Input Builder
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    bool isPassword = false,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextField(
-      controller: controller,
-      obscureText: isPassword,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: SafeHerColors.accent),
-        hintText: hint,
-        fillColor: const Color(0xFFFCFAFF),
       ),
     );
   }
