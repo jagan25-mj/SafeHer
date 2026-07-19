@@ -29,15 +29,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Debug APK
-        run: flutter build apk --debug -v > build_log.txt 2>&1
-
-      - name: Upload Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Build-Logs
-          path: build_log.txt
-          retention-days: 3
+        run: flutter build apk --debug -v
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
