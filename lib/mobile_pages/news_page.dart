@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -118,7 +119,12 @@ class _NewsPageState extends State<NewsPage> {
     try {
       final query = _getSearchQuery();
       final url = 'https://news.google.com/rss/search?q=$query&hl=en-IN&gl=IN&ceid=IN:en';
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'User-Agent': 'SafeHer/1.0 (Flutter; Women Safety App)',
+        },
+      );
 
       if (response.statusCode == 200) {
         await _saveCachePayload(prefs, cacheKey, response.body);
@@ -462,10 +468,17 @@ class _NewsPageState extends State<NewsPage> {
   }
 
   String _formatDate(String rawDate) {
-    if (rawDate.length > 22) {
-      return rawDate.substring(0, 22);
+    try {
+      final dt = HttpDate.parse(rawDate);
+      final diff = DateTime.now().toUtc().difference(dt);
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      return rawDate.length > 22 ? rawDate.substring(0, 22) : rawDate;
+    } catch (_) {
+      if (rawDate.length > 22) return rawDate.substring(0, 22);
+      return rawDate;
     }
-    return rawDate;
   }
 }
 

@@ -69,67 +69,60 @@ class RegistrationScreenState extends State<RegistrationScreen> {
   }
 
   Future<void> _register() async {
+    // Client-side validation (shown directly to user)
+    final fullName = _fullName.text.trim();
+    final email = _email.text.trim().toLowerCase();
+    final phone = _phone.text.trim();
+
+    if (fullName.isEmpty || email.isEmpty || phone.isEmpty) {
+      _showValidationError('Please complete your full name, email, and phone.');
+      return;
+    }
+
+    if (_pass.text.length < 8) {
+      _showValidationError('Password must be at least 8 characters.');
+      return;
+    }
+
+    if (!_emailRegex.hasMatch(email)) {
+      _showValidationError('Please enter a valid email address.');
+      return;
+    }
+
+    if (!_phoneRegex.hasMatch(phone)) {
+      _showValidationError('Please enter a valid phone number (7-15 digits).');
+      return;
+    }
+
+    final contactRows = [
+      {'label': _c1Label.text.trim(), 'phone': _c1Phone.text.trim()},
+      {'label': _c2Label.text.trim(), 'phone': _c2Phone.text.trim()},
+      {'label': _c3Label.text.trim(), 'phone': _c3Phone.text.trim()},
+    ];
+
+    final validContacts = contactRows
+        .where((c) =>
+            (c['label'] as String).isNotEmpty &&
+            (c['phone'] as String).isNotEmpty)
+        .toList();
+
+    if (validContacts.isEmpty) {
+      _showValidationError('Please fill in at least one emergency contact.');
+      return;
+    }
+
+    for (final contact in validContacts) {
+      if (!_phoneRegex.hasMatch(contact['phone'] as String)) {
+        _showValidationError(
+          'Emergency contact "${contact['label']}" has an invalid phone number.',
+        );
+        return;
+      }
+    }
+
+    // API call
     setState(() => _loading = true);
     try {
-      final fullName = _fullName.text.trim();
-      final email = _email.text.trim().toLowerCase();
-      final phone = _phone.text.trim();
-
-      if (fullName.isEmpty || email.isEmpty || phone.isEmpty) {
-        throw Exception('Please complete your full name, email, and phone.');
-      }
-
-      if (_pass.text.length < 8) {
-        throw Exception('Password must be at least 8 characters.');
-      }
-
-      if (!_emailRegex.hasMatch(email)) {
-        throw Exception('Please enter a valid email address.');
-      }
-
-      if (!_phoneRegex.hasMatch(phone)) {
-        throw Exception(
-          'Please enter a valid phone number (7-15 digits).',
-        );
-      }
-
-      final contactRows = [
-        {
-          'label': _c1Label.text.trim(),
-          'phone': _c1Phone.text.trim(),
-        },
-        {
-          'label': _c2Label.text.trim(),
-          'phone': _c2Phone.text.trim(),
-        },
-        {
-          'label': _c3Label.text.trim(),
-          'phone': _c3Phone.text.trim(),
-        },
-      ];
-
-      final validContacts = contactRows
-          .where(
-            (contact) =>
-                (contact['label'] as String).isNotEmpty &&
-                (contact['phone'] as String).isNotEmpty,
-          )
-          .toList();
-
-      if (validContacts.isEmpty) {
-        throw Exception(
-          'Please fill in at least one emergency contact.',
-        );
-      }
-
-      for (final contact in validContacts) {
-        if (!_phoneRegex.hasMatch(contact['phone'] as String)) {
-          throw Exception(
-            'Emergency contact "${contact['label']}" has an invalid phone number.',
-          );
-        }
-      }
-
       await Supabase.instance.client.auth.signUp(
         email: email,
         password: _pass.text,
@@ -160,6 +153,12 @@ class RegistrationScreenState extends State<RegistrationScreen> {
       }
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  void _showValidationError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+    );
   }
 
   @override
