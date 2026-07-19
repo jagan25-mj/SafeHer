@@ -106,7 +106,8 @@ class RegistrationScreenState extends State<RegistrationScreen> {
           'full_name': fullName,
           'phone': phone,
           'email': email,
-          'role': 'USER',
+          'role': 'user',
+          'emergency_contacts': [],
         }, onConflict: 'id');
 
         final contactRows = [

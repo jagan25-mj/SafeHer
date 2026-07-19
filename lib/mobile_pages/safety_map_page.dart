@@ -55,7 +55,7 @@ class _SafetyMapPageState extends State<SafetyMapPage> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
       final predictionFuture = _fetchThreatPrediction(position);

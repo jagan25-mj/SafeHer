@@ -58,7 +58,7 @@ class _CommunityPageState extends State<CommunityPage> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
       if (!mounted) return;
@@ -162,7 +162,7 @@ class _CommunityPageState extends State<CommunityPage> {
 
     try {
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
       await _supabase.from('community_locations').upsert({
@@ -358,7 +358,7 @@ class _CommunityPageState extends State<CommunityPage> {
                     Switch(
                       value: _sharingMyLocation,
                       onChanged: (_) => _toggleLocationSharing(),
-                      activeColor: SafeHerColors.success,
+                      activeThumbColor: SafeHerColors.success,
                     ),
                   ],
                 ),

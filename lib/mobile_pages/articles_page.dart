@@ -399,17 +399,22 @@ class _ArticleItem {
 
   static String _deriveCategory(String title, String content) {
     final text = '$title $content'.toLowerCase();
-    if (text.contains('digital') || text.contains('privacy'))
+    if (text.contains('digital') || text.contains('privacy')) {
       return 'Digital Safety';
+    }
     if (text.contains('travel') ||
         text.contains('commute') ||
-        text.contains('night'))
+        text.contains('night')) {
       return 'Travel';
+    }
     if (text.contains('sos') ||
         text.contains('plan') ||
-        text.contains('prepared'))
+        text.contains('prepared')) {
       return 'Preparedness';
-    if (text.contains('response') || text.contains('alert')) return 'Response';
+    }
+    if (text.contains('response') || text.contains('alert')) {
+      return 'Response';
+    }
     return 'Safety';
   }
 

@@ -72,7 +72,7 @@ class _LocationSharePageState extends State<LocationSharePage> {
     }
 
     return Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
     );
   }
 

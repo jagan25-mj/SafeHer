@@ -12,6 +12,7 @@ import 'danger_detection_service.dart';
 import 'sos_service.dart';
 import 'mobile_pages/articles_page.dart';
 import 'mobile_pages/community_page.dart';
+import 'mobile_pages/news_page.dart';
 import 'mobile_pages/contacts_page.dart';
 import 'mobile_pages/helplines_page.dart';
 import 'mobile_pages/location_share_page.dart';
@@ -197,7 +198,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
       final predictionFuture = _fetchThreatPrediction(position);
@@ -524,7 +525,7 @@ out body 20;
                         runSpacing: 8,
                         children: [
                           _Pill(
-                            label: _isRecording ? _sosStatus : '$_sosStatus',
+                            label: _sosStatus,
                             background: _isRecording
                                 ? const Color(0xFFFFE2F1)
                                 : const Color(0xFFDCF8ED),
@@ -661,7 +662,7 @@ out body 20;
                             Switch(
                               value: _shakeEnabled,
                               onChanged: _toggleShakeDetection,
-                              activeColor: const Color(0xFFEF4444),
+                              activeThumbColor: const Color(0xFFEF4444),
                             ),
                           ],
                         ),
@@ -728,7 +729,7 @@ out body 20;
                             Switch(
                               value: _voiceEnabled,
                               onChanged: (v) => _toggleVoiceCommand(v),
-                              activeColor: SafeHerColors.accent,
+                              activeThumbColor: SafeHerColors.accent,
                             ),
                           ],
                         ),
@@ -985,6 +986,12 @@ out body 20;
                       title: "Community",
                       subtitle: "Nearby SafeHer users",
                       onTap: () => _openCommunityPage(context),
+                    ),
+                    _FeatureTile(
+                      icon: Icons.newspaper_rounded,
+                      title: "Live News",
+                      subtitle: "Latest safety updates",
+                      onTap: () => _openNewsPage(context),
                     ),
                   ],
                 ),
@@ -1344,6 +1351,12 @@ out body 20;
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const CommunityPage()));
+  }
+
+  void _openNewsPage(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const NewsPage()));
   }
 }
 

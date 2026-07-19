@@ -24,6 +24,8 @@ dependencies:
   latlong2: ^0.9.1
   http: ^1.2.2
   speech_to_text: ^7.0.0
+  xml: ^7.0.1
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:
