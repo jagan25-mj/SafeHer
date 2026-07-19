@@ -68,6 +68,25 @@ class RegistrationScreenState extends State<RegistrationScreen> {
     return 'Unable to create your account. Please check your details and try again.';
   }
 
+  Future<void> _saveEmergencyContactsForUser({
+    required String userId,
+    required List<Map<String, String>> contacts,
+  }) async {
+    if (contacts.isEmpty) return;
+
+    final rows = contacts
+        .map(
+          (contact) => {
+            'user_id': userId,
+            'label': contact['label'],
+            'phone': contact['phone'],
+          },
+        )
+        .toList();
+
+    await Supabase.instance.client.from('emergency_contacts').insert(rows);
+  }
+
   Future<void> _register() async {
     // Client-side validation (shown directly to user)
     final fullName = _fullName.text.trim();
@@ -104,6 +123,12 @@ class RegistrationScreenState extends State<RegistrationScreen> {
         .where((c) =>
             (c['label'] as String).isNotEmpty &&
             (c['phone'] as String).isNotEmpty)
+        .map(
+          (c) => {
+            'label': c['label'] as String,
+            'phone': c['phone'] as String,
+          },
+        )
         .toList();
 
     if (validContacts.isEmpty) {
@@ -123,26 +148,48 @@ class RegistrationScreenState extends State<RegistrationScreen> {
     // API call
     setState(() => _loading = true);
     try {
-      await Supabase.instance.client.auth.signUp(
+      final response = await Supabase.instance.client.auth.signUp(
         email: email,
         password: _pass.text,
         data: {
           'full_name': fullName,
           'phone': phone,
-          'emergency_contacts': validContacts,
         },
       );
 
+      final userId = response.user?.id;
+      final hasSession = response.session != null;
+      if (userId != null && hasSession && validContacts.isNotEmpty) {
+        await _saveEmergencyContactsForUser(
+          userId: userId,
+          contacts: validContacts,
+        );
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Account created. Check your email if confirmation is enabled, then sign in.',
+              hasSession
+                  ? 'Account created successfully. You can now sign in.'
+                  : 'Account created. Check your email if confirmation is enabled, then sign in.',
             ),
           ),
         );
       }
+    } on AuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _friendlyRegistrationError(e.message.isEmpty ? e : e.message),
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     } catch (e) {
+      debugPrint('Registration failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

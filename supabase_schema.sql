@@ -56,6 +56,7 @@ SET search_path = public
 AS $$
 DECLARE
     contact_item jsonb;
+    has_emergency_contacts_table boolean;
 BEGIN
     INSERT INTO public.profiles (id, phone, role, full_name, email)
     VALUES (
@@ -71,7 +72,10 @@ BEGIN
             full_name = EXCLUDED.full_name,
             email = EXCLUDED.email;
 
-    IF jsonb_typeof(NEW.raw_user_meta_data -> 'emergency_contacts') = 'array' THEN
+    has_emergency_contacts_table := to_regclass('public.emergency_contacts') IS NOT NULL;
+
+    IF has_emergency_contacts_table
+       AND jsonb_typeof(NEW.raw_user_meta_data -> 'emergency_contacts') = 'array' THEN
         DELETE FROM public.emergency_contacts
         WHERE user_id = NEW.id;
 

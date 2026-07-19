@@ -17,6 +17,27 @@ class _LoginScreenState extends State<LoginScreen> {
   final _pass = TextEditingController();
   bool _loading = false;
 
+  String _friendlyLoginError(Object error) {
+    final message = error.toString().toLowerCase();
+
+    if (message.contains('email not confirmed') ||
+        message.contains('not_confirmed')) {
+      return 'Your email is not verified yet. Please open your confirmation email and verify your account first.';
+    }
+
+    if (message.contains('invalid login credentials') ||
+        message.contains('invalid email') ||
+        message.contains('invalid password')) {
+      return 'Invalid email address or password. Please try again.';
+    }
+
+    if (message.contains('too many requests') || message.contains('rate limit')) {
+      return 'Too many attempts. Please wait a minute and try again.';
+    }
+
+    return 'Unable to sign in right now. Please try again.';
+  }
+
   @override
   void dispose() {
     _email.dispose();
@@ -46,7 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    final email = _email.text.trim();
+    final email = _email.text.trim().toLowerCase();
     final password = _pass.text;
 
     if (email.isEmpty) {
@@ -75,25 +96,22 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
-    } on AuthException {
-      // Supabase auth error — use same generic message
+    } on AuthException catch (e) {
+      debugPrint('Login failed (AuthException): ${e.message}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid email address or password. Please try again.'),
+          SnackBar(
+            content: Text(_friendlyLoginError(e.message.isEmpty ? e : e.message)),
             backgroundColor: Colors.redAccent,
           ),
         );
       }
     } catch (e) {
+      debugPrint('Login failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              e.toString().contains('Invalid email')
-                  ? e.toString().replaceFirst('Exception: ', '')
-                  : 'Unable to sign in. Please check your details and try again.',
-            ),
+            content: Text(_friendlyLoginError(e)),
             backgroundColor: Colors.redAccent,
           ),
         );
