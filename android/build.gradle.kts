@@ -22,3 +22,14 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
+
+subprojects {
+    afterEvaluate {
+        if (plugins.hasPlugin("com.android.library")) {
+            val android = extensions.getByName("android") as com.android.build.gradle.LibraryExtension
+            if (android.compileSdk == null) {
+                android.compileSdk = 34
+            }
+        }
+    }
+}
