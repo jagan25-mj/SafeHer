@@ -12,8 +12,8 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.safeher.app"
-    compileSdkVersion 34
-    ndkVersion "26.1.10909125"
+    compileSdkVersion 36
+    ndkVersion "28.2.13676358"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
