@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
 
 class ContactsPage extends StatefulWidget {
@@ -298,6 +299,21 @@ class _ContactsPageState extends State<ContactsPage> {
                                           ),
                                         ),
                                       ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () async {
+                                      final phone = contact['phone']?.toString();
+                                      if (phone != null && phone.isNotEmpty) {
+                                        final Uri url = Uri.parse('tel:$phone');
+                                        if (await canLaunchUrl(url)) {
+                                          await launchUrl(url);
+                                        }
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.phone,
+                                      color: SafeHerColors.brandStrong,
                                     ),
                                   ),
                                   IconButton(
