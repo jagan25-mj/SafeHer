@@ -70,25 +70,6 @@ class RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
-  Future<void> _saveEmergencyContactsForUser({
-    required String userId,
-    required List<Map<String, String>> contacts,
-  }) async {
-    if (contacts.isEmpty) return;
-
-    final rows = contacts
-        .map(
-          (contact) => {
-            'user_id': userId,
-            'label': contact['label'],
-            'phone': contact['phone'],
-          },
-        )
-        .toList();
-
-    await Supabase.instance.client.from('emergency_contacts').insert(rows);
-  }
-
   Future<void> _register() async {
     // Client-side validation
     final fullName = _fullName.text.trim();
@@ -148,7 +129,7 @@ class RegistrationScreenState extends State<RegistrationScreen> {
     // API call
     setState(() => _loading = true);
     try {
-      final response = await Supabase.instance.client.auth.signUp(
+      await Supabase.instance.client.auth.signUp(
         email: email,
         password: _pass.text,
         data: {

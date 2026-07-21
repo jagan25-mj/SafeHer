@@ -17,27 +17,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _pass = TextEditingController();
   bool _loading = false;
 
-  String _friendlyLoginError(Object error) {
-    final message = error.toString().toLowerCase();
-
-    if (message.contains('email not confirmed') ||
-        message.contains('not_confirmed')) {
-      return 'Your email is not verified yet. Please open your confirmation email and verify your account first.';
-    }
-
-    if (message.contains('invalid login credentials') ||
-        message.contains('invalid email') ||
-        message.contains('invalid password')) {
-      return 'Invalid email address or password. Please try again.';
-    }
-
-    if (message.contains('too many requests') || message.contains('rate limit')) {
-      return 'Too many attempts. Please wait a minute and try again.';
-    }
-
-    return 'Unable to sign in right now. Please try again.';
-  }
-
   @override
   void dispose() {
     _email.dispose();
