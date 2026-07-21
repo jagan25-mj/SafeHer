@@ -20,8 +20,8 @@ android {
     namespace = "com.safeher.app"
     // compileSdkVersion 34
     compileSdk = 34
-    // ndkVersion 26
-    ndkVersion = flutter.ndkVersion
+    // ndkVersion "26.1.10909125"
+    ndkVersion = "26.1.10909125"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
